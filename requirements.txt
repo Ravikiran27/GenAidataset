@@ -1,0 +1,8 @@
+flask
+flask_socketio
+eventlet
+imagehash
+opencv-python
+Pillow
+icrawler
+Werkzeug

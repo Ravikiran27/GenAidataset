@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}GenData Dashboard{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+</head>
+<body class="flex h-screen bg-gray-100">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md">
+    <div class="p-4 text-xl font-bold">GenData</div>
+    <nav class="mt-4">
+      <a href="{{ url_for('dashboard') }}"
+         class="block px-4 py-2 hover:bg-gray-200 {% if request.path=='/' %}bg-gray-200{% endif %}">
+        Dashboard
+      </a>
+    <a href="{{ url_for('history_page') }}"
+       class="block px-4 py-2 hover:bg-gray-200 {% if request.path=='/history' %}bg-gray-200{% endif %}">
+      History
+    </a>
+      <a href="{{ url_for('logout') }}"
+         class="block px-4 py-2 hover:bg-gray-200">Logout</a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="bg-white shadow px-4 py-2 flex justify-between">
+      <h1 class="text-2xl">{% block page_heading %}{% endblock %}</h1>
+      <div>Logged in as {{ session.username }}</div>
+    </header>
+    <main class="flex-1 overflow-auto p-6">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="space-y-2 mb-4">
+          {% for category, msg in messages %}
+            <div class="p-2 rounded {{ 'bg-green-100' if category=='success' else 'bg-red-100' }}">
+              {{ msg }}
+            </div>
+          {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

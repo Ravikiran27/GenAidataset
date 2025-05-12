@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block title %}Preview · GenData{% endblock %}
+{% block page_heading %}Preview {{ pid }} / {{ category }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <button id="select-all" class="bg-gray-300 px-2 py-1">Select All</button>
+  <select id="action" class="border px-2 py-1">
+    <option value="grayscale">Grayscale</option>
+    <option value="rotate">Rotate</option>
+    <option value="flip">Flip</option>
+    <option value="resize">Resize</option>
+  </select>
+  <button id="apply-edit" class="bg-blue-600 text-white px-4 py-1">Apply</button>
+</div>
+<div id="thumb-grid" class="grid grid-cols-4 gap-4">
+  {% for fn in files %}
+    <div class="relative">
+      <input type="checkbox" class="absolute top-1 left-1 z-10" value="{{ fn }}">
+      <img src="{{ url_for('serve', u=session.username, pid=pid, cat=category, fn=fn) }}"
+           class="border">
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function(){
+  $("#select-all").click(() => {
+    $("#thumb-grid input[type=checkbox]").prop("checked", true);
+  });
+  $("#apply-edit").click(() => {
+    const fns = $("#thumb-grid input:checked")
+                  .map(function(){ return this.value; }).get();
+    $.ajax({
+      url: "/edit",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({
+        pid: "{{ pid }}",
+        category: "{{ category }}",
+        filenames: fns,
+        action: $("#action").val()
+      }),
+      success: () => location.reload()
+    });
+  });
+});
+</script>
+{% endblock %}

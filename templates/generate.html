@@ -1,0 +1,18 @@
+<!doctype html>
+<html><body>
+<h2>Generate Dataset</h2>
+<form method="post">
+  Categories:<input name="categories"/><br/>
+  Num Images:<input type="number" name="num_images"/><br/>
+  Reset History:<input type="checkbox" name="reset"/><br/>
+  <button>Run</button>
+</form>
+{% if results %}
+  <h3>Results (Process ID: {{pid}})</h3>
+  <ul>
+  {% for cat,count in results.items() %}
+    <li>{{cat}}: {{count}}</li>
+  {% endfor %}
+  </ul>
+{% endif %}
+</body></html>

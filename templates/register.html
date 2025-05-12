@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block title %}Register · GenData{% endblock %}
+{% block page_heading %}Register{% endblock %}
+
+{% block content %}
+<form method="POST" class="space-y-4 bg-white p-6 rounded shadow w-1/3 mx-auto">
+  <div>
+    <label>Username</label>
+    <input name="username" class="border w-full px-2 py-1">
+  </div>
+  <div>
+    <label>Password</label>
+    <input type="password" name="password" class="border w-full px-2 py-1">
+  </div>
+  <button class="bg-blue-600 text-white px-4 py-2">Register</button>
+</form>
+{% endblock %}

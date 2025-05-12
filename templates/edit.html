@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Image</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        img {
+            max-width: 300px;
+            display: block;
+            margin-bottom: 20px;
+        }
+        form button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 16px;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Edit Image</h2>
+    <img src="{{ url_for('serve_image', username=username, pid=pid, category=category, filename=filename) }}" alt="Image Preview">
+    <form method="POST">
+        <div class="actions">
+            <button type="submit" name="action" value="grayscale">Grayscale</button>
+            <button type="submit" name="action" value="rotate">Rotate 90°</button>
+            <button type="submit" name="action" value="flip">Flip Horizontally</button>
+            <button type="submit" name="action" value="resize">Resize to 224x224</button>
+        </div>
+    </form>
+</body>
+</html>

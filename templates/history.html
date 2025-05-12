@@ -1,0 +1,92 @@
+{% extends "layout.html" %}
+{% block title %}History · GenData{% endblock %}
+{% block page_heading %}Your History{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded shadow mb-6">
+  <table class="w-full table-auto">
+    <thead>
+      <tr>
+        <th class="px-4 py-2">PID</th>
+        <th class="px-4 py-2">Categories (qty)</th>
+        <th class="px-4 py-2">Results</th>
+        <th class="px-4 py-2">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="history-body"></tbody>
+  </table>
+</div>
+
+<!-- Preview Section -->
+<div id="preview-panel" class="hidden bg-white p-6 rounded shadow">
+  <h2 class="text-xl mb-4">Preview of <span id="preview-pid"></span></h2>
+  <div id="preview-grid" class="space-y-6"></div>
+  <a id="download-link" href="#"
+     class="mt-4 inline-block bg-indigo-600 text-white px-4 py-2 rounded hidden">
+    Download ZIP
+  </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function(){
+  const username = "{{ session.username }}";
+
+  function renderPreview(pid, categories) {
+    $("#preview-grid").empty();
+    categories.forEach(cat => {
+      const cname = cat.name.replace(/ /g, "_");
+      const $section = $(`
+        <div>
+          <h3 class="text-lg font-semibold mb-2">${cat.name}</h3>
+          <div class="grid grid-cols-4 gap-4" id="cat-${cname}"></div>
+        </div>
+      `);
+      $("#preview-grid").append($section);
+      $.getJSON(`/image_list/${pid}/${cname}`, files => {
+        files.forEach(fn => {
+          $(`#cat-${cname}`).append(`
+            <img src="/data/${username}/${pid}/${cname}/${fn}"
+                 class="w-full h-32 object-cover border" title="${fn}">
+          `);
+        });
+      });
+    });
+    $("#preview-pid").text(pid);
+    $("#download-link").attr("href", `/download/${pid}`).removeClass("hidden");
+    $("#preview-panel").removeClass("hidden");
+  }
+
+  $.getJSON("/history", data => {
+    data.reverse().forEach(entry => {
+      const cats = entry.categories.map(c=>`${c.name}(${c.qty})`).join(", ");
+      const results = Object.entries(entry.results || {})
+                            .map(([k,v])=>`${k}:${v}`).join(", ");
+      const catData = JSON.stringify(entry.categories || []);
+      $("#history-body").append(`
+        <tr>
+          <td class="border px-4 py-2">${entry.pid}</td>
+          <td class="border px-4 py-2">${cats}</td>
+          <td class="border px-4 py-2">${results}</td>
+          <td class="border px-4 py-2 space-x-2">
+            <a href="/download/${entry.pid}"
+               class="bg-indigo-500 text-white px-2 py-1 rounded">Download</a>
+            <button class="bg-gray-700 text-white px-2 py-1 rounded preview-btn"
+                    data-pid="${entry.pid}" data-cats='${catData}'>
+              Preview
+            </button>
+          </td>
+        </tr>
+      `);
+    });
+  });
+
+  $(document).on("click", ".preview-btn", function(){
+    const pid = $(this).data("pid");
+    const cats = JSON.parse($(this).attr("data-cats"));
+    renderPreview(pid, cats);
+  });
+});
+</script>
+{% endblock %}
