@@ -21,7 +21,7 @@ from dataset_generator import (
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
 socketio = SocketIO(app, async_mode="threading")
-port = int(os.environ.get("PORT", 5000))
+port = int(os.environ.get("PORT", 8080))
 USERS_FILE = "users.json"
 
 def load_users():
