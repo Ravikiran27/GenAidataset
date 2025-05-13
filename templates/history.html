@@ -20,6 +20,13 @@
 <!-- Preview Section -->
 <div id="preview-panel" class="hidden bg-white p-6 rounded shadow">
   <h2 class="text-xl mb-4">Preview of <span id="preview-pid"></span></h2>
+  
+  <!-- Animated Loader -->
+  <div id="preview-loader" class="text-center my-8 hidden">
+    <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-500 mx-auto mb-2"></div>
+    <p class="text-gray-600">Loading preview...</p>
+  </div>
+
   <div id="preview-grid" class="space-y-6"></div>
   <a id="download-link" href="#"
      class="mt-4 inline-block bg-indigo-600 text-white px-4 py-2 rounded hidden">
@@ -35,6 +42,13 @@ $(function(){
 
   function renderPreview(pid, categories) {
     $("#preview-grid").empty();
+    $("#preview-loader").removeClass("hidden");
+    $("#preview-panel").removeClass("hidden");
+    $("#download-link").addClass("hidden");
+    $("#preview-pid").text(pid);
+
+    let loadedCount = 0;
+
     categories.forEach(cat => {
       const cname = cat.name.replace(/ /g, "_");
       const $section = $(`
@@ -44,18 +58,22 @@ $(function(){
         </div>
       `);
       $("#preview-grid").append($section);
+
       $.getJSON(`/image_list/${pid}/${cname}`, files => {
         files.forEach(fn => {
           $(`#cat-${cname}`).append(`
             <img src="/data/${username}/${pid}/${cname}/${fn}"
-                 class="w-full h-32 object-cover border" title="${fn}">
+                 class="w-full h-32 object-cover border hover:scale-105 transition duration-200"
+                 title="${fn}">
           `);
         });
+        loadedCount++;
+        if (loadedCount === categories.length) {
+          $("#preview-loader").addClass("hidden");
+          $("#download-link").attr("href", `/download/${pid}`).removeClass("hidden");
+        }
       });
     });
-    $("#preview-pid").text(pid);
-    $("#download-link").attr("href", `/download/${pid}`).removeClass("hidden");
-    $("#preview-panel").removeClass("hidden");
   }
 
   $.getJSON("/history", data => {
@@ -64,19 +82,22 @@ $(function(){
       const results = Object.entries(entry.results || {})
                             .map(([k,v])=>`${k}:${v}`).join(", ");
       const catData = JSON.stringify(entry.categories || []);
+      const isDeleted = entry.pid.startsWith("deleted_");
+      const rowStyle = isDeleted ? "text-gray-400 italic" : "";
+      const actionButtons = isDeleted ? `
+        <span class="text-red-500 text-sm">(deleted)</span>
+      ` : `
+        <a href="/download/${entry.pid}" class="bg-indigo-500 text-white px-2 py-1 rounded">Download</a>
+        <button class="bg-gray-700 text-white px-2 py-1 rounded preview-btn" data-pid="${entry.pid}" data-cats='${catData}'>Preview</button>
+        <button class="bg-red-500 text-white px-2 py-1 rounded delete-btn" data-pid="${entry.pid}">Delete</button>
+      `;
+
       $("#history-body").append(`
-        <tr>
+        <tr class="${rowStyle}">
           <td class="border px-4 py-2">${entry.pid}</td>
           <td class="border px-4 py-2">${cats}</td>
           <td class="border px-4 py-2">${results}</td>
-          <td class="border px-4 py-2 space-x-2">
-            <a href="/download/${entry.pid}"
-               class="bg-indigo-500 text-white px-2 py-1 rounded">Download</a>
-            <button class="bg-gray-700 text-white px-2 py-1 rounded preview-btn"
-                    data-pid="${entry.pid}" data-cats='${catData}'>
-              Preview
-            </button>
-          </td>
+          <td class="border px-4 py-2 space-x-2">${actionButtons}</td>
         </tr>
       `);
     });
@@ -86,6 +107,35 @@ $(function(){
     const pid = $(this).data("pid");
     const cats = JSON.parse($(this).attr("data-cats"));
     renderPreview(pid, cats);
+  });
+
+  $(document).on("click", ".delete-btn", function(){
+    const pid = $(this).data("pid");
+    if (confirm(`Are you sure you want to delete entry "${pid}"?`)) {
+      $.ajax({
+        url: `/delete/${pid}`,
+        type: 'DELETE',
+        success: function(response) {
+          const newPid = response.new_pid;
+          const $row = $(`button[data-pid='${pid}']`).closest("tr");
+
+          // Update UI
+          $row.find("td:first").html(`${newPid} <span class="text-red-500 text-sm">(deleted)</span>`);
+          $row.addClass("text-gray-400 italic");
+          $row.find(".preview-btn, .delete-btn").remove();
+          $row.find("a[href^='/download/']").remove();
+
+          if ($("#preview-pid").text() === pid) {
+            $("#preview-panel").addClass("hidden");
+          }
+
+          alert(`Entry renamed as ${newPid}`);
+        },
+        error: function() {
+          alert("Failed to delete. Please try again.");
+        }
+      });
+    }
   });
 });
 </script>
