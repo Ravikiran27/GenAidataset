@@ -1,6 +1,6 @@
 import eventlet
 eventlet.monkey_patch()
-
+import time
 import os
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
@@ -165,7 +165,47 @@ def download(pid):
     user = session["username"]
     zp = create_zip(user, pid)
     return send_from_directory(os.path.dirname(zp), os.path.basename(zp), as_attachment=True)
+@app.route('/delete/<pid>', methods=['DELETE'])
+def delete_history_entry(pid):
+    username = session.get('username')
+    if not username:
+        return "Unauthorized", 401
 
+    old_path = os.path.join("data_sessions", username, pid)
+    if not os.path.exists(old_path):
+        return "Not Found", 404
+
+    timestamp = int(time.time())
+    new_pid = f"deleted_{pid}_{timestamp}"
+    new_path = os.path.join("data_sessions", username, new_pid)
+
+    try:
+        # Remove images in images folder under pid
+        images_dir = os.path.join(old_path, "images")
+        if os.path.isdir(images_dir):
+            for root, dirs, files in os.walk(images_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        print(f"Failed to remove {file_path}: {e}")
+        os.rename(old_path, new_path)
+
+        # Remove entry from history.json under this user for this pid
+        history_file = os.path.join("data_sessions", username, "history.json")
+        if os.path.exists(history_file):
+            with open(history_file, "r") as f:
+                history = json.load(f)
+            # Remove entry with matching pid
+            new_history = [entry for entry in history if entry.get("pid") != pid]
+            with open(history_file, "w") as f:
+                json.dump(new_history, f, indent=2)
+    except Exception as e:
+        print("Rename error:", e)
+        return "Failed to delete", 500
+
+    return jsonify({"status": "deleted", "new_pid": new_pid})
 # ---------- Socket.IO join ----------
 @socketio.on("join")
 def on_join(data):
