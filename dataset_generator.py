@@ -70,80 +70,65 @@ def is_valid_image(path):
 # -----------------------------------------------------------------------------
 def generate_text_dataset(categories, reset, base_dir, session_id, progress_callback=None):
     """
-    categories: [ { "name": str, "qty": int }, ... ]
-    reset:      wipe base_dir if True
-    base_dir:   e.g. data_sessions/<user>/<pid>
-    session_id: for dedupe across crawls
-    progress_callback(cat, fetched, total)
-    """
-    global current_session
-    current_session = session_id
-    session_urls[session_id] = set()
+    Simplified text dataset generator: for each category, crawl up to qty images
+    and copy them without extra dedupe or validation.
 
-    # prepare directories
+    Parameters:
+    - categories: list of dicts, each with:
+        • 'name' (str): search keyword
+        • 'qty'  (int): max images to fetch
+    - reset: if True, deletes base_dir before starting
+    - base_dir: root dir for this session
+    - session_id: kept for signature consistency (unused)
+    - progress_callback: optional fn(category, fetched, total)
+    Returns:
+    - results: dict mapping category name to number fetched
+    """
+    # 1) Wipe and recreate base_dir if requested
     if reset and os.path.isdir(base_dir):
         shutil.rmtree(base_dir)
     os.makedirs(base_dir, exist_ok=True)
 
     results = {}
     for cat in categories:
-        name, total = cat["name"], cat["qty"]
-        safe = name.replace(" ", "_")
-        img_dir = os.path.join(base_dir, "images", safe)
-        raw_dir = os.path.join(base_dir, "raw",    safe)
-        os.makedirs(img_dir, exist_ok=True)
-        os.makedirs(raw_dir, exist_ok=True)
+        name = cat['name']
+        total = cat['qty']
+        safe = name.replace(' ', '_')
 
-        fetched = len(os.listdir(img_dir))
-        logger.info(f"[{name}] starting with {fetched}/{total}")
-        attempt = 0
+        # Directories for final images and temp crawl storage
+        output_dir = os.path.join(base_dir, 'images', safe)
+        raw_dir    = os.path.join(base_dir, 'raw',    safe)
+        for d in (output_dir, raw_dir):
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+            os.makedirs(d, exist_ok=True)
 
-        while fetched < total+1 and attempt < MAX_FETCH_ATTEMPTS:
-            attempt += 1
-            need = total - fetched
-            shutil.rmtree(raw_dir)
-            os.makedirs(raw_dir, exist_ok=True)
-            # crawl up to `need` new images
-            for C in (GoogleImageCrawler, BingImageCrawler):
-                crawler = C(
-                    feeder_threads=1,
-                    parser_threads=1,
-                    downloader_threads=4,
-                    storage={"root_dir": raw_dir},
-                    downloader_cls=RecordingDownloader
-                )
-                crawler.crawl(keyword=name, max_num=need, min_size=MIN_SIZE)
+        # Crawl each source once, up to `total` images
+        for C in (GoogleImageCrawler, BingImageCrawler):
+            crawler = C(
+                feeder_threads=1,
+                parser_threads=1,
+                downloader_threads=4,
+                storage={'root_dir': raw_dir}
+            )
+            crawler.crawl(keyword=name, max_num=total, min_size=0)
 
-            # filter & move
-            for fn in os.listdir(raw_dir):
-                if fetched == total:
-                    break
+        # Copy the first `total` files from raw_dir → output_dir
+        fetched = 0
+        for fn in sorted(os.listdir(raw_dir)):
+            if fetched >= total:
+                break
+            src = os.path.join(raw_dir, fn)
+            dst = os.path.join(output_dir, fn)
+            shutil.copy(src, dst)
+            fetched += 1
+            if progress_callback:
+                progress_callback(name, fetched, total)
 
-                src = os.path.join(raw_dir, fn)
-                if not is_valid_image(src):
-                    continue
-
-                dst = os.path.join(img_dir, fn)
-                if os.path.exists(dst):
-                    continue
-
-                # save as JPEG to normalize
-                try:
-                    with Image.open(src) as im:
-                        rgb = im.convert("RGB")
-                        rgb.save(dst, format="JPEG", quality=JPEG_QUALITY)
-                except (UnidentifiedImageError, OSError) as e:
-                    logger.warning(f"Skipping {src}: {e}")
-                    continue
-
-                fetched += 1
-                if progress_callback:
-                    progress_callback(name, fetched, total)
-
-            logger.info(f"[{name}] attempt {attempt}: now {fetched}/{total}")
-
+        # Clean up temp crawl folder
+        shutil.rmtree(raw_dir)
         results[name] = fetched
-    shutil.rmtree(raw_dir)
+
     return results
 
 # -----------------------------------------------------------------------------
