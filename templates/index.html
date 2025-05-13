@@ -2,8 +2,25 @@
 {% block title %}Dashboard · GenData{% endblock %}
 {% block page_heading %}Generate Dataset{% endblock %}
 
+{% block head %}
+  {{ super() }}
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+{% endblock %}
+
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 relative">
+  <!-- Spinner overlay -->
+  <div id="loading-overlay" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="flex flex-col items-center">
+      <svg class="animate-spin h-16 w-16 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      <p class="mt-4 text-white animate-pulse">Processing...</p>
+    </div>
+  </div>
 
   <!-- Form -->
   <div class="bg-white p-6 rounded shadow">
@@ -11,25 +28,21 @@
     <form id="generate-form" class="space-y-4">
       <div id="categories-list" class="space-y-2">
         <div class="flex space-x-2">
-          <input type="text" name="cat-name" placeholder="Category name"
-                 class="border px-2 py-1 flex-1">
-          <input type="number" name="cat-qty" placeholder="Qty"
-                 class="border px-2 py-1 w-24">
-          <button type="button" class="remove-cat bg-red-500 text-white px-2">−</button>
+          <input type="text" name="cat-name" placeholder="Category name" class="border px-2 py-1 flex-1">
+          <input type="number" name="cat-qty" placeholder="Qty" class="border px-2 py-1 w-24">
+          <button type="button" class="remove-cat bg-red-500 text-white px-2 rounded">−</button>
         </div>
       </div>
-      <button id="add-cat" type="button"
-              class="bg-blue-500 text-white px-4 py-1 rounded">+ Add Category</button>
+      <button id="add-cat" type="button" class="bg-blue-500 text-white px-4 py-1 rounded">+ Add Category</button>
 
       <div>
         <label class="block mb-1">Or upload images (will be stored under category “uploaded”):</label>
-        <input id="image-upload" type="file" multiple>
+        <input id="image-upload" type="file" multiple class="border p-1 w-full" />
       </div>
 
       <div class="flex items-center space-x-4">
-        <label><input type="checkbox" id="reset-flag"> Reset existing</label>
-        <button type="submit"
-                class="bg-green-600 text-white px-6 py-2 rounded">Generate</button>
+        <label class="flex items-center"><input type="checkbox" id="reset-flag" class="mr-2"> Reset existing</label>
+        <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded transform transition hover:scale-105">Generate</button>
       </div>
     </form>
   </div>
@@ -37,20 +50,17 @@
   <!-- Progress -->
   <div id="progress-panel" class="hidden bg-white p-6 rounded shadow">
     <h2 class="text-xl mb-4">Progress</h2>
-    <div class="w-full bg-gray-200 rounded overflow-hidden">
-      <div id="progress-bar" class="bg-blue-500 h-4 w-0"></div>
+    <div class="w-full bg-gray-200 rounded overflow-hidden h-4">
+      <div id="progress-bar" class="bg-blue-500 h-4 w-0 transition-all"></div>
     </div>
-    <div id="progress-status" class="mt-2 text-sm"></div>
+    <div id="progress-status" class="mt-2 text-sm italic text-gray-600 animate-pulse">Waiting for updates...</div>
   </div>
 
   <!-- Preview -->
   <div id="preview-panel" class="hidden bg-white p-6 rounded shadow">
     <h2 class="text-xl mb-4">Preview & Download</h2>
     <div id="preview-grid" class="space-y-6"></div>
-    <a id="download-link" href="#"
-       class="mt-4 inline-block bg-indigo-600 text-white px-4 py-2 rounded hidden">
-      Download ZIP
-    </a>
+    <a id="download-link" href="#" class="mt-4 inline-block bg-indigo-600 text-white px-4 py-2 rounded hidden transform transition hover:scale-105">Download ZIP</a>
   </div>
 
   <!-- History -->
@@ -58,7 +68,6 @@
     <h2 class="text-xl mb-2">Past Processes</h2>
     <ul id="history-list" class="space-y-1 text-sm text-blue-700 cursor-pointer"></ul>
   </div>
-
 </div>
 {% endblock %}
 
@@ -74,53 +83,64 @@ $(function(){
       $("#history-list").empty();
       data.reverse().forEach(entry => {
         const cats = entry.categories.map(c => `${c.name}(${c.qty})`).join(", ");
-        $("#history-list").append(`
-          <li class="hover:underline" data-pid="${entry.pid}" data-cats='${JSON.stringify(entry.categories)}'>
+        $("#history-list").append(
+          `<li class="hover:underline" data-pid="${entry.pid}" data-cats='${JSON.stringify(entry.categories)}'>
             ${entry.pid} – ${cats}
-          </li>
-        `);
+          </li>`
+        );
       });
     });
   }
 
   function renderPreview(pid, categories) {
-    $("#preview-grid").empty();
-    categories.forEach(cat => {
-      const cname = cat.name.replace(/ /g, "_");
-      const section = $(`
-        <div>
-          <h3 class="text-lg font-semibold mb-2">${cat.name}</h3>
-          <div class="grid grid-cols-4 gap-4" id="cat-${cname}"></div>
-        </div>
-      `);
-      $("#preview-grid").append(section);
-      $.getJSON(`/image_list/${pid}/${cname}`, files => {
-        files.forEach(fn => {
-          $(`#cat-${cname}`).append(`
-            <img src="/data/${username}/${pid}/${cname}/${fn}" class="w-full h-32 object-cover border" title="${fn}">
-          `);
-        });
+  $("#preview-grid").empty();
+
+  categories.forEach(cat => {
+    const cname = cat.name.replace(/ /g, "_");
+
+    const section = $(`
+      <div class="mb-8">
+        <h3 class="text-xl font-bold mb-3 text-gray-800 border-b pb-1">${cat.name}</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="cat-${cname}"></div>
+      </div>
+    `);
+
+    $("#preview-grid").append(section);
+
+    $.getJSON(`/image_list/${pid}/${cname}`, files => {
+      files.forEach(fn => {
+        $(`#cat-${cname}`).append(`
+          <img src="/data/${username}/${pid}/${cname}/${fn}" 
+               class="w-full h-40 object-cover border rounded shadow transition-transform duration-300 hover:scale-105" 
+               title="${fn}">
+        `);
       });
     });
-    $("#download-link").attr("href", `/download/${pid}`).removeClass("hidden");
-  }
+  });
+
+  $("#download-link").attr("href", `/download/${pid}`).removeClass("hidden");
+}
+
 
   socket.on("progress", data => {
     if (data.pid !== currentPid) return;
-    const pct = data.percent + "%";
+    $("#loading-overlay").removeClass("hidden");
+    const pct = Math.round((data.fetched/data.total)*100) + "%";
     $("#progress-bar").width(pct);
-    $("#progress-status").text(`${data.category}: ${data.fetched}/${data.total} (${pct})`);
+    $("#progress-status").text(`${data.category}: ${data.fetched}/${data.total} (${pct})`).removeClass('animate-pulse');
   });
 
   socket.on("completed", data => {
     if (data.pid !== currentPid) return;
+    $("#loading-overlay").addClass("hidden");
     $("#progress-panel").hide();
     $("#preview-panel").show();
     renderPreview(data.pid, data.entry.categories);
     loadHistory();
+    $("#generate-form button[type=submit]").attr("disabled", false);
   });
 
-  $("#generate-form").submit(e => {
+  $("#generate-form").submit(function(e){
     e.preventDefault();
     const cats = [];
     $("#categories-list > div").each(function(){
@@ -130,22 +150,17 @@ $(function(){
     });
 
     const uploads = Array.from($("#image-upload")[0].files);
-    if (uploads.length) {
-      cats.push({ name: "uploaded", qty: uploads.length });
-    }
+    if (uploads.length) cats.push({ name: "uploaded", qty: uploads.length });
 
-    const payload = {
-      categories: cats,
-      images: [], // to be handled in future
-      reset: $("#reset-flag").is(":checked")
-    };
+    const payload = { categories: cats, images: uploads, reset: $("#reset-flag").is(":checked") };
 
     $("#preview-panel").hide();
     $("#preview-grid").empty();
     $("#download-link").addClass("hidden");
     $("#progress-panel").show();
     $("#progress-bar").width("0%");
-    $("#progress-status").text("");
+    $("#progress-status").text("Waiting for updates...").addClass('animate-pulse');
+    $("#generate-form button[type=submit]").attr("disabled", true);
 
     $.ajax({
       url: "/generate",
@@ -155,17 +170,35 @@ $(function(){
       success: resp => {
         currentPid = resp.pid;
         socket.emit("join", { pid: currentPid });
+      },
+      error: () => {
+        $("#loading-overlay").addClass("hidden");
+        $("#generate-form button[type=submit]").attr("disabled", false);
+        alert("Generation failed. Try again.");
       }
     });
   });
 
   $(document).on("click", "#history-list li", function(){
-    const pid = $(this).data("pid");
+    currentPid = $(this).data("pid");
     const cats = JSON.parse($(this).attr("data-cats"));
-    currentPid = pid;
     $("#preview-panel").show();
     $("#preview-grid").empty();
-    renderPreview(pid, cats);
+    renderPreview(currentPid, cats);
+  });
+
+  $(document).on("click", ".remove-cat", function(){
+    $(this).closest('div').remove();
+  });
+
+  $("#add-cat").click(function(){
+    $("#categories-list").append(
+      `<div class="flex space-x-2">
+         <input type="text" name="cat-name" placeholder="Category name" class="border px-2 py-1 flex-1">
+         <input type="number" name="cat-qty" placeholder="Qty" class="border px-2 py-1 w-24">
+         <button type="button" class="remove-cat bg-red-500 text-white px-2 rounded">−</button>
+       </div>`
+    );
   });
 
   loadHistory();
